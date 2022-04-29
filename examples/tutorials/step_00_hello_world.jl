@@ -1,17 +1,6 @@
-
 using MPI
 using T8code
 using CBinding
-using Base.Libc.Libdl
-
-HOME = ENV["HOME"];
-
-T8DIR = "$(HOME)/opt/t8code"
-
-INCDIR = "$(T8DIR)/include"
-LIBDIR = "$(T8DIR)/lib"
-
-p4 = dlopen("$(LIBDIR)/libp4est.so",RTLD_GLOBAL)
 
 # /* Initialize MPI. This has to happen before we initialize sc or T8. */
 MPI.Init()

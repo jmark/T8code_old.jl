@@ -17,7 +17,9 @@ c`
     -DSC_ENABLE_MPI=1
     -I$(INCDIR)
     -I$(INCDIR)/src
-    -L$(LIBDIR) -lsc -lp4est -lt8`
+    -L$(LIBDIR) -lt8`
+
+    # -L$(LIBDIR) -lsc -lp4est -lt8`
 
 const c"int8_t" = Int8
 const c"int16_t" = Int16
@@ -54,7 +56,6 @@ c"""
 # include <t8.h>
 # include <t8_cmesh.h>
 # include <t8_cmesh_vtk.h>
-# include <t8_cmesh/t8_cmesh_examples.h>
 # include <t8_forest.h>
 # include <t8_forest_vtk.h>
 """i
