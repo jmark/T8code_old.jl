@@ -1,3 +1,5 @@
+**Disclaimer: This package is under heavy construction.**
+
 # T8code.jl
 
 **T8code.jl** is a Julia package that wraps
