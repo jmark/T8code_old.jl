@@ -13,14 +13,14 @@ with Julia v1.6 or newer.
 T8code.jl depends on [t8code](https://github.com/holke/t8code) and a MPI
 distribution provided by your system.
 
-### Setup
+## Setup
 For example, if your t8code library is installed to `/opt/t8code`,
 use it from T8code.jl by executing
 ```bash
 julia --project -e 'ENV["JULIA_T8CODE_PATH"] = "/opt/t8code";'
 ```
 
-### Usage
+## Usage
 Check out the `examples/tutorials` directory on how to use this package.
 
 ## Authors
