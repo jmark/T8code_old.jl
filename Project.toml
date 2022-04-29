@@ -1,0 +1,9 @@
+name = "T8code"
+uuid = "c1f84430-d8d9-419b-89ce-751fd9defe78"
+authors = ["jmark <me@jmark.de>"]
+version = "0.1.0"
+
+[deps]
+CBinding = "d43a6710-96b8-4a2d-833c-c424785e5374"
+Clang_jll = "0ee61d77-7f21-5576-8119-9fcc46b10100"
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
