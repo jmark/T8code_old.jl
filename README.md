@@ -25,7 +25,7 @@ Check out the `examples/tutorials` directory on how to use this package.
 
 ## Authors
 T8code.jl is maintained by
-[Johannes Markert](https://www.hlrs.de/people/schlottke-lakemper)
+[Johannes Markert](https://www.jmark.de)
 (German Aerospace Center (DLR), Germany),
 The [t8code](https://github.com/holke/t8code) library itself is written by
 Johannes Holke, Carsten Burstedde, and many others.
