@@ -2,6 +2,9 @@ module T8code
 
 using CBinding;
 
+export @P4EST_ASSERT
+export @T8CODE_ASSERT
+
 # Old hack: deprecated
 # using Base.Libc.Libdl
 # p4 = dlopen("$(LIBDIR)/libp4est.so",RTLD_GLOBAL)
@@ -50,8 +53,10 @@ c"""
 # include <sc_shmem.h>
 # include <sc_refcount.h>
 # include <p4est.h>
+# include <p4est_vtk.h>
 # include <p4est_extended.h>
 # include <p8est.h>
+# include <p8est_vtk.h>
 # include <p8est_extended.h>
 # include <t8.h>
 # include <t8_cmesh.h>
@@ -61,5 +66,19 @@ c"""
 """i
 
 c"t8_scheme_cxx_t    *t8_scheme_new_default_cxx (void);"
+
+macro SC_ASSERT(q)
+    :( $(esc(q)) ? nothing : throw(AssertionError($(string(q)))) )
+end
+
+macro P4EST_ASSERT(q)
+    :( @SC_ASSERT($(esc(q)) ) )
+end
+
+P4EST_QUADRANT_LEN(l) = 1 << (c"P4EST_MAXLEVEL" - l)
+
+macro T8CODE_ASSERT(q)
+    :( @SC_ASSERT($(esc(q)) ) )
+end
 
 end # module
