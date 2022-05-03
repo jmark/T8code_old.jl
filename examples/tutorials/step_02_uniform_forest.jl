@@ -1,3 +1,5 @@
+# vim: tabstop=2:softtabstop=2
+
 using MPI
 using T8code
 using CBinding
@@ -27,6 +29,7 @@ end
 function t8_step2_build_uniform_forest(comm, cmesh, level)
   # /* Create the refinement scheme. */
   scheme = c"t8_scheme_new_default_cxx"();
+
   # /* Creat the uniform forest. */
   forest = c"t8_forest_new_uniform"(cmesh, scheme, level, 0, comm);
 

@@ -3,7 +3,7 @@ module T8code
 using CBinding;
 
 export @P4EST_ASSERT
-export @T8CODE_ASSERT
+export @T8_ASSERT
 
 # Old hack: deprecated
 # using Base.Libc.Libdl
@@ -59,13 +59,35 @@ c"""
 # include <p8est_vtk.h>
 # include <p8est_extended.h>
 # include <t8.h>
+# include <t8_element.h>
 # include <t8_cmesh.h>
 # include <t8_cmesh_vtk.h>
 # include <t8_forest.h>
 # include <t8_forest_vtk.h>
+
+# include <t8_vec.h>
 """i
 
 c"t8_scheme_cxx_t    *t8_scheme_new_default_cxx (void);"
+
+# c"""
+# typedef struct {
+#     int dummy;
+# } t8_element_t;"""
+
+# c"""
+#     typedef struct t8_element t8_element_t;
+# """
+
+# c"""
+# int t8_step3_forest_adapt_cb (t8_forest_t forest,
+#                           t8_forest_t forest_from,
+#                           t8_locidx_t which_tree,
+#                           t8_locidx_t lelement_id,
+#                           t8_eclass_scheme_c * ts,
+#                           int num_elements,
+#                           t8_element_t * elements[]);
+# """
 
 macro SC_ASSERT(q)
     :( $(esc(q)) ? nothing : throw(AssertionError($(string(q)))) )
@@ -77,7 +99,7 @@ end
 
 P4EST_QUADRANT_LEN(l) = 1 << (c"P4EST_MAXLEVEL" - l)
 
-macro T8CODE_ASSERT(q)
+macro T8_ASSERT(q)
     :( @SC_ASSERT($(esc(q)) ) )
 end
 
