@@ -63,8 +63,10 @@ c"""
 # include <t8_cmesh.h>
 # include <t8_cmesh_vtk.h>
 # include <t8_forest.h>
+
 # include <t8_forest_vtk.h>
 
+# include <t8_element_c_interface.h>
 # include <t8_vec.h>
 """i
 
