@@ -38,6 +38,7 @@ function t8_step3_adapt_callback(forest,
                          which_tree,
                          lelement_id,
                          ts,
+                         is_family, 
                          num_elements,
                          elements)
 
@@ -66,7 +67,7 @@ function t8_step3_adapt_callback(forest,
   tree_vertices = c"t8_forest_get_tree_vertices"(forest_from, which_tree);
   
   # /* Compute the element's centroid coordinates. */
-  c"t8_forest_element_centroid"(forest_from, which_tree, elements[], tree_vertices, Ref(centroid));
+  c"t8_forest_element_centroid"(forest_from, which_tree, elements[], Ref(centroid));
   
   # /* Compute the distance to our sphere midpoint. */
   dist = c"t8_vec_dist"(Ref(centroid), Ref(adapt_data.midpoint));
@@ -84,7 +85,7 @@ function t8_step3_adapt_callback(forest,
 end
 
 function t8_step5_build_forest(comm, level)
-  cmesh = c"t8_cmesh_new_hypercube_hybrid"(3, comm, 0, 0);
+  cmesh = c"t8_cmesh_new_hypercube_hybrid"(comm, 0, 0);
   scheme = c"t8_scheme_new_default_cxx"();
 
   # /* Start with a uniform forest. */
@@ -182,7 +183,7 @@ function t8_step5_create_element_data(forest)
       # /* We want to store the elements level and its volume as data. We compute these
       #  * via the eclass_scheme and the forest_element interface. */
       level = c"t8_element_level"(eclass_scheme, element)
-      volume = c"t8_forest_element_volume"(forest, itree, element, tree_vertices);
+      volume = c"t8_forest_element_volume"(forest, itree, element);
 
       element_data[current_index] = t8_step5_data_per_element_t(level,volume)
     end # for
