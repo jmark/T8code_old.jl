@@ -16,7 +16,6 @@ LIBDIR = "$(T8DIR)/lib"
 
 c`
     -Wall
-    -fparse-all-comments
     -DSC_ENABLE_MPI=1
     -I$(INCDIR)
     -I$(INCDIR)/src

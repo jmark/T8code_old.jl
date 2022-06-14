@@ -24,6 +24,20 @@ $ julia --project
 ## Usage
 Check out the `examples/tutorials` directory on how to use this package.
 
+## Timings
+Using T8code.jl for the first time will take several seconds to precompile.
+For example, on my machine I get:
+```
+julia> @time using T8code
+ [... some output ...]
+ 19.333991 seconds (551.69 k allocations: 39.069 MiB, 0.25% compilation time)
+```
+Using the module next time is much faster:
+```
+julia> @time using T8code
+ 0.330443 seconds (514.11 k allocations: 37.093 MiB, 8.33% compilation time)
+```
+
 ## Authors
 T8code.jl is maintained by
 [Johannes Markert](https://www.jmark.de)
