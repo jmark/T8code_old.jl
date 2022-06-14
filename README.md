@@ -42,8 +42,8 @@ julia> @time using T8code
 T8code.jl is maintained by
 [Johannes Markert](https://www.jmark.de)
 (German Aerospace Center (DLR), Germany),
-The [t8code](https://github.com/holke/t8code) library itself is written by
-Johannes Holke, Carsten Burstedde, and many others.
+The [t8code](https://github.com/holke/t8code) library itself is maintained by
+Johannes Holke and many others.
 
 ## License
 T8code.jl is licensed under the MIT license (see [LICENSE.md](LICENSE.md)).
