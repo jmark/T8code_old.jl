@@ -7,9 +7,9 @@ using CBinding
 # /* This is our own defined data that we will pass on to the
 #  * adaptation callback. */
 mutable struct t8_step3_adapt_data_t
-  midpoint                    :: Vector{Float64}
-  refine_if_inside_radius     :: Float64
-  coarsen_if_outside_radius   :: Float64
+  midpoint                    :: NTuple{3,Cdouble}
+  refine_if_inside_radius     :: Cdouble
+  coarsen_if_outside_radius   :: Cdouble 
 end
 
 # /* The adaptation callback function. This function will be called once for each element
@@ -39,11 +39,11 @@ function t8_step3_adapt_callback(forest,
                          ts,
                          is_family,
                          num_elements,
-                         elements)
+                         elements) :: Cint
 
   # /* Our adaptation criterion is to look at the midpoint coordinates of the current element and if
   #  * they are inside a sphere around a given midpoint we refine, if they are outside, we coarsen. */
-  centroid = Array{Float64}(undef,3);      # /* Will hold the element midpoint. */
+  centroid = NTuple{3,Float64}((0,0,0));      # /* Will hold the element midpoint. */
   
   # /* In t8_step3_adapt_forest we pass a t8_step3_adapt_data pointer as user data to the
   #  * t8_forest_new_adapt function. This pointer is stored as the used data of the new forest
@@ -72,22 +72,22 @@ function t8_step3_adapt_callback(forest,
   dist = c"t8_vec_dist"(Ref(centroid), Ref(adapt_data.midpoint));
   if dist < adapt_data.refine_if_inside_radius
     # /* Refine this element. */
-    return Int32(1);
+    return 1;
   elseif num_elements > 1 && dist > adapt_data.coarsen_if_outside_radius
     # /* Coarsen this family. Note that we check for num_elements > 1 before, since returning < 0
     # * if we do not have a family as input is illegal. */
-    return Int32(-1);
+    return -1;
   end
   
   # /* Do not change this element. */
-  return Int32(0);
+  return 0;
 end
 
 # /* Adapt a forest according to our t8_step3_adapt_callback function.
 #  * This will create a new forest and return it. */
 function t8_step3_adapt_forest(forest)
   adapt_data = t8_step3_adapt_data_t(
-    [0.5, 0.5, 1.0],      # /* Midpoints of the sphere. */
+    (0.5, 0.5, 1.0),      # /* Midpoints of the sphere. */
     0.2,                  # /* Refine if inside this radius. */
     0.4                   # /* Coarsen if outside this radius. */
   );

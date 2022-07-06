@@ -28,10 +28,18 @@ mutable struct t8_step5_data_per_element_t
   volume  :: Float64
 end
 
-# mutable struct t8_step5_vtk_datafield_t
-#   type :: Int32
-#   description = 
-# end
+const BUFSIZ = 8192
+
+mutable struct t8_vtk_data_field_t
+  type        :: Int32
+  description :: NTuple{BUFSIZ,UInt8}
+  data        :: Ptr{Cvoid}
+end
+
+function string2ASCII(s,BUFSIZ=BUFSIZ)
+  n = min(length(s),BUFSIZ)
+  return NTuple{BUFSIZ,UInt8}(Vector{UInt8}(s[1:n] * "\0"^(BUFSIZ-n)))
+end
 
 function t8_step3_adapt_callback(forest,
                          forest_from,
@@ -222,34 +230,14 @@ end
 function t8_step5_output_data_to_vtu(forest, data, prefix)
   num_elements = c"t8_forest_get_local_num_elements"(forest);
 
-  # println("num_elements: ", num_elements)
-  # println("length data:  ", length(data))
-  # println("volume of 1:  ", data[end].volume)
-
   # /* Copy the elment's volumes from our data array to the output array. */
-  element_volumes = [data[i].volume for i in 1:num_elements]
-
-  # element_volumes = Vector{Float64}(undef,num_elements)
-  # for ielem = 1:num_elements
-  #   # element_volumes[ielem] = data[ielem].volume;
-  #   element_volumes[ielem] = 42.0
-  # end
+  element_volumes = Vector{Cdouble}([data[i].volume for i in 1:num_elements])
 
   # # /* The number of user defined data fields to write. */
   num_data = 1;
 
-  # println(c"BUFSIZ")
-
-  # FIXME: c"t8_vtk_data_field_t" chokes on large 'description' field (BUFSIZ > 8,000 !!)
-
-  # # /* For each user defined data field we need one t8_vtk_data_field_t variable */
-  vtk_data = c"t8_vtk_data_field_t"(
-      # /* Set the type of this variable. Since we have one value per element, we pick T8_VTK_SCALAR */
-      type = c"T8_VTK_SCALAR",
-      # /* The name of the field as should be written to the file. */
-      description = "Element Volume",
-      data = Ref(element_volumes),
-  )
+  desc = string2ASCII("Element Volume")
+  vtk_data = t8_vtk_data_field_t(c"T8_VTK_SCALAR",desc,pointer(element_volumes))
 
   # /* To write user defined data, we need to extended output function t8_forest_vtk_write_file
   #  * from t8_forest_vtk.h. Despite writing user data, it also offers more control over which 
@@ -260,11 +248,9 @@ function t8_step5_output_data_to_vtu(forest, data, prefix)
   write_element_id  = 1;
   write_ghosts      = 0;
 
-  # FIXME: 'element_volumes' does not get properly written to file ??
-
-  c"t8_forest_vtk_write_file"(forest, prefix, write_treeid, write_mpirank,
+  c"t8_forest_write_vtk_ext"(forest, prefix, write_treeid, write_mpirank,
                               write_level, write_element_id, write_ghosts,
-                              num_data, Ref(vtk_data));
+                              0, 0, num_data, Ref(vtk_data));
 end
 
 # /* The prefix for our output files. */

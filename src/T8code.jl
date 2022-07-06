@@ -19,6 +19,7 @@ c`
     -DSC_ENABLE_MPI=1
     -I$(INCDIR)
     -I$(INCDIR)/src
+    -I/usr/lib/x86_64-linux-gnu/openmpi/include
     -L$(LIBDIR) -lt8`
 
     # -L$(LIBDIR) -lsc -lp4est -lt8`
@@ -64,7 +65,8 @@ c"""
 # include <t8_forest.h>
 # include <t8_cmesh/t8_cmesh_examples.h>
 
-# include <t8_forest_vtk.h>
+# include <t8_cmesh_vtk.h>
+# include <t8_vtk.h>
 
 # include <t8_element_c_interface.h>
 # include <t8_vec.h>
