@@ -6,16 +6,9 @@ using CBinding
 
 NULL = C_NULL
 
-# /* This is step5 of the t8code tutorials.
-#  * 
-#  * TODO: This file still needs to be documented.
-#  * How you can experiment here:
-#  *   -
-#  *  */
-
 # /* This is our own defined data that we will pass on to the
 #  * adaptation callback. */
-mutable struct t8_step3_adapt_data_t
+struct t8_step3_adapt_data_t
   midpoint                    :: Vector{Float64}
   refine_if_inside_radius     :: Float64
   coarsen_if_outside_radius   :: Float64
@@ -23,14 +16,15 @@ end
 
 # /* The data that we want to store for each element.
 #  * In this example we want to store the element's level and volume. */
-mutable struct t8_step5_data_per_element_t
+struct t8_step5_data_per_element_t
   level   :: Cint
-  volume  :: Float64
+  volume  :: Cdouble
+  state   :: Cdouble
 end
 
 const BUFSIZ = 8192
 
-mutable struct t8_vtk_data_field_t
+struct t8_vtk_data_field_t
   type        :: Int32
   description :: NTuple{BUFSIZ,UInt8}
   data        :: Ptr{Cvoid}
@@ -41,14 +35,19 @@ function string2ASCII(s,BUFSIZ=BUFSIZ)
   return NTuple{BUFSIZ,UInt8}(Vector{UInt8}(s[1:n] * "\0"^(BUFSIZ-n)))
 end
 
-function t8_step3_adapt_callback(forest,
+function _adapt_callback(forest,
                          forest_from,
                          which_tree,
                          lelement_id,
                          ts,
                          is_family, 
                          num_elements,
-                         elements)
+                         elements) :: Cint
+
+  # tree_class = c"t8_forest_get_tree_class"(forest_from, which_tree);
+  # eclass_scheme = c"t8_forest_get_eclass_scheme"(forest_from, tree_class);
+
+  level = c"t8_element_level"(ts, elements[])
 
   # /* Our adaptation criterion is to look at the midpoint coordinates of the current element and if
   #  * they are inside a sphere around a given midpoint we refine, if they are outside, we coarsen. */
@@ -75,53 +74,25 @@ function t8_step3_adapt_callback(forest,
   tree_vertices = c"t8_forest_get_tree_vertices"(forest_from, which_tree);
   
   # /* Compute the element's centroid coordinates. */
-  c"t8_forest_element_centroid"(forest_from, which_tree, elements[], Ref(centroid));
+  c"t8_forest_element_centroid"(forest_from, which_tree, elements[], pointer(centroid));
   
   # /* Compute the distance to our sphere midpoint. */
-  dist = c"t8_vec_dist"(Ref(centroid), Ref(adapt_data.midpoint));
-  if dist < adapt_data.refine_if_inside_radius
+  dist = c"t8_vec_dist"(pointer(centroid), pointer(adapt_data.midpoint));
+
+  if level < level_max && dist < adapt_data.refine_if_inside_radius
     # /* Refine this element. */
-    return Int32(1);
-  elseif num_elements > 1 && dist > adapt_data.coarsen_if_outside_radius
+    return 1;
+  elseif level > level_min && num_elements > 1 && dist > adapt_data.coarsen_if_outside_radius
     # /* Coarsen this family. Note that we check for num_elements > 1 before, since returning < 0
     # * if we do not have a family as input is illegal. */
-    return Int32(-1);
+    return -1;
   end
   
   # /* Do not change this element. */
-  return Int32(0);
+  return 0;
 end
 
-function t8_step5_build_forest(comm, level)
-  cmesh = c"t8_cmesh_new_hypercube_hybrid"(comm, 0, 0);
-  scheme = c"t8_scheme_new_default_cxx"();
-
-  # /* Start with a uniform forest. */
-  forest = c"t8_forest_new_uniform"(cmesh, scheme, level, 0, comm);
-
-  # /* Adapt, partition, balance and create ghost elements all in the same step. */
-  forest_apbg = c"t8_forest_t"();
-  forest_apbg_ref = Ref(forest_apbg);
-  c"t8_forest_init"(forest_apbg_ref);
-  forest_apbg = forest_apbg_ref[];
-
-  adapt_data = t8_step3_adapt_data_t(
-    [0.5, 0.5, 1],              # /* Midpoints of the sphere. */
-    0.2,                        # /* Refine if inside this radius. */
-    0.4                         # /* Coarsen if outside this radius. */
-  )
-
-  c"t8_forest_set_user_data"(forest_apbg, Ref(adapt_data));
-  c"t8_forest_set_adapt"(forest_apbg, forest, t8_step3_adapt_callback, 0);
-  c"t8_forest_set_partition"(forest_apbg, NULL, 0);
-  c"t8_forest_set_balance"(forest_apbg, NULL, 0);
-  c"t8_forest_set_ghost"(forest_apbg, 1, c"T8_GHOST_FACES");
-  c"t8_forest_commit"(forest_apbg);
-
-  return forest_apbg;
-end
-
-function t8_step5_create_element_data(forest)
+function _create_element_data(forest)
   # t8_locidx_t         num_local_elements;
   # t8_locidx_t         num_ghost_elements;
   # struct t8_step5_data_per_element *element_data;
@@ -194,11 +165,18 @@ function t8_step5_create_element_data(forest)
       volume = c"t8_forest_element_volume"(forest, itree, element);
 
       centroid = Array{Float64}(undef,3);      # /* Will hold the element midpoint. */
-      c"t8_forest_element_centroid"(forest, itree, element, Ref(centroid));
+      c"t8_forest_element_centroid"(forest, itree, element, pointer(centroid));
 
-      element_data[current_index] = t8_step5_data_per_element_t(level,volume)
+      # println("centroid = ", centroid)
+      # println("volume = ", volume)
+
+      state = centroid[1]^2 - centroid[2]^2
+
+      element_data[current_index] = t8_step5_data_per_element_t(level,volume,state)
     end # for
   end # for
+
+  # println("centroid = ", centroid)
 
   return element_data;
 end
@@ -230,17 +208,20 @@ end
 #  * We support two types: T8_VTK_SCALAR - One double per element
 #  *                  and  T8_VTK_VECTOR - 3 doubles per element
 #  */
-function t8_step5_output_data_to_vtu(forest, data, prefix)
+function _output_data_to_vtu(forest, data, prefix)
   num_elements = c"t8_forest_get_local_num_elements"(forest);
 
   # /* Copy the elment's volumes from our data array to the output array. */
   element_volumes = Vector{Cdouble}([data[i].volume for i in 1:num_elements])
+  element_states  = Vector{Cdouble}([data[i].state for i in 1:num_elements])
 
   # # /* The number of user defined data fields to write. */
-  num_data = 1;
+  num_data = 2;
 
-  desc = string2ASCII("Element Volume")
-  vtk_data = t8_vtk_data_field_t(c"T8_VTK_SCALAR",desc,pointer(element_volumes))
+  vtk_data = t8_vtk_data_field_t[
+    t8_vtk_data_field_t(c"T8_VTK_SCALAR",string2ASCII("Element Volume"),pointer(element_volumes)),
+    t8_vtk_data_field_t(c"T8_VTK_SCALAR",string2ASCII("Element State"),pointer(element_states))
+  ]
 
   # /* To write user defined data, we need to extended output function t8_forest_vtk_write_file
   #  * from t8_forest_vtk.h. Despite writing user data, it also offers more control over which 
@@ -253,15 +234,17 @@ function t8_step5_output_data_to_vtu(forest, data, prefix)
 
   c"t8_forest_write_vtk_ext"(forest, prefix, write_treeid, write_mpirank,
                               write_level, write_element_id, write_ghosts,
-                              0, 0, num_data, Ref(vtk_data));
+                              0, 0, num_data, pointer(vtk_data));
 end
 
 # /* The prefix for our output files. */
-const prefix_forest           = "t8_step5_forest";
-const prefix_forest_with_data = "t8_step5_forest_with_volume_data";
+const prefix_forest           = "2d_forest";
+const prefix_forest_with_data = "2d_forest_with_volume_data";
 
 # /* The uniform refinement level of the forest. */
-const level = 3;
+const level_min = 3;
+const level_max = 7;
+const ndim = 2;
 
 # /* Initialize MPI. This has to happen before we initialize sc or t8code. */
 MPI.Init()
@@ -273,54 +256,89 @@ c"sc_init"(comm, 1, 1, NULL, c"SC_LP_ESSENTIAL");
 # c"t8_init"(c"SC_LP_PRODUCTION");
 c"t8_init"(c"SC_LP_VERBOSE");
 
-# /* Print a message on the root process. */
-c"t8_global_productionf"(" [step5] \n");
-c"t8_global_productionf"(" [step5] Hello, this is the step5 example of t8code.\n");
-c"t8_global_productionf"(" [step5] In this example we will store data on our elements and exchange the data of ghost elements.\n");
-c"t8_global_productionf"(" [step5] \n");
+# function t8_step5_build_forest(comm, level)
+#   cmesh = c"t8_cmesh_new_hypercube_hybrid"(comm, 0, 0);
+#   scheme = c"t8_scheme_new_default_cxx"();
+# 
+#   # /* Adapt, partition, balance and create ghost elements all in the same step. */
+#   forest_apbg = c"t8_forest_t"();
+#   forest_apbg_ref = Ref(forest_apbg);
+#   c"t8_forest_init"(forest_apbg_ref);
+#   forest_apbg = forest_apbg_ref[];
+# 
+#   adapt_data = t8_step3_adapt_data_t(
+#     [0.5, 0.5, 1],              # /* Midpoints of the sphere. */
+#     0.2,                        # /* Refine if inside this radius. */
+#     0.4                         # /* Coarsen if outside this radius. */
+#   )
+# 
+#   c"t8_forest_set_user_data"(forest_apbg, Ref(adapt_data));
+#   c"t8_forest_set_adapt"(forest_apbg, forest, t8_step3_adapt_callback, 0);
+#   c"t8_forest_set_partition"(forest_apbg, NULL, 0);
+#   c"t8_forest_set_balance"(forest_apbg, NULL, 0);
+#   c"t8_forest_set_ghost"(forest_apbg, 1, c"T8_GHOST_FACES");
+#   c"t8_forest_commit"(forest_apbg);
+# 
+#   return forest_apbg;
+# end
 
-# /*
-# * Setup.
-# * Build cmesh and uniform forest.
-# */
-c"t8_global_productionf"(" [step5] \n");
-c"t8_global_productionf"(" [step5] Creating an adapted forest as in step3.\n");
-c"t8_global_productionf"(" [step5] \n");
+cmesh = c"t8_cmesh_new_periodic"(comm, ndim);
+# cmesh = c"t8_cmesh_new_periodic_tri"(comm);
+# cmesh = c"t8_cmesh_new_periodic_hybrid"(comm);
+scheme = c"t8_scheme_new_default_cxx"();
 
-forest = t8_step5_build_forest(comm, level);
-c"t8_forest_write_vtk"(forest, prefix_forest);
-c"t8_global_productionf"(" [step5] Wrote forest to vtu files: %s*\n", prefix_forest);
+# /* Start with a uniform forest. */
+root_forest = c"t8_forest_new_uniform"(cmesh, scheme, level_min, 0, comm);
+
+# /* Adapt, partition, balance and create ghost elements all in the same step. */
+forest_apbg = c"t8_forest_t"();
+forest_apbg_ref = Ref(forest_apbg);
+c"t8_forest_init"(forest_apbg_ref);
+forest = forest_apbg_ref[];
+
+adapt_data = t8_step3_adapt_data_t(
+  [0.5, 0.5, 0.0],            # /* Midpoints of the sphere. */
+  0.2,                        # /* Refine if inside this radius. */
+  0.4                         # /* Coarsen if outside this radius. */
+)
+
+c"t8_forest_set_user_data"(forest, Ref(adapt_data));
+c"t8_forest_set_adapt"(forest, root_forest, _adapt_callback, 1);
+c"t8_forest_set_partition"(forest, NULL, 0);
+c"t8_forest_set_balance"(forest, NULL, 0);
+# c"t8_forest_set_ghost"(forest, 1, c"T8_GHOST_FACES");
+c"t8_forest_commit"(forest);
 
 # /*
 # * Build data array and gather data for the local elements.
 # */
-data = t8_step5_create_element_data(forest);
+data = _create_element_data(forest);
 
 c"t8_global_productionf"(" [step5] Computed level and volume data for local elements.\n");
 if c"t8_forest_get_local_num_elements"(forest) > 0
     # /* Output the stored data of the first local element (if it exists). */
-    c"t8_global_productionf"(" [step5] Element 0 has level %i and volume %e.\n",data[1].level, data[1].volume);
+    c"t8_global_productionf"(" Element 0 has level %i and volume %e.\n",data[1].level, data[1].volume);
 end
 
-# /*
-# * Exchange the data values of the ghost elements
-# */
-t8_step5_exchange_ghost_data(forest, data);
-c"t8_global_productionf"(" [step5] Exchanged ghost data.\n");
-
-if c"t8_forest_get_num_ghosts"(forest) > 0
-  # /* output the data of the first ghost element (if it exists) */
-  first_ghost_index = c"t8_forest_get_local_num_elements"(forest);
-  c"t8_global_productionf"(" [step5] Ghost 0 has level %i and volume %e.\n",
-                       data[first_ghost_index+1].level,
-                       data[first_ghost_index+1].volume);
-end
+# # /*
+# # * Exchange the data values of the ghost elements
+# # */
+# t8_step5_exchange_ghost_data(forest, data);
+# c"t8_global_productionf"(" [step5] Exchanged ghost data.\n");
+# 
+# if c"t8_forest_get_num_ghosts"(forest) > 0
+#   # /* output the data of the first ghost element (if it exists) */
+#   first_ghost_index = c"t8_forest_get_local_num_elements"(forest);
+#   c"t8_global_productionf"(" [step5] Ghost 0 has level %i and volume %e.\n",
+#                        data[first_ghost_index+1].level,
+#                        data[first_ghost_index+1].volume);
+# end
 
 # /*
 # * Output the volume data to vtu.
 # */
-t8_step5_output_data_to_vtu(forest, data, prefix_forest_with_data);
-c"t8_global_productionf"(" [step5] Wrote forest and volume data to %s*.\n", prefix_forest_with_data);
+_output_data_to_vtu(forest, data, prefix_forest);
+c"t8_global_productionf"(" Wrote forest and volume data to %s*.\n", prefix_forest);
 
 # /*
 # * clean-up
@@ -328,7 +346,5 @@ c"t8_global_productionf"(" [step5] Wrote forest and volume data to %s*.\n", pref
 
 # /* Destroy the forest. */
 c"t8_forest_unref"(Ref(forest));
-c"t8_global_productionf"(" [step5] Destroyed forest.\n");
-
 c"sc_finalize"();
 c"sc_MPI_Finalize"();

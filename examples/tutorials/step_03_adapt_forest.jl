@@ -66,7 +66,7 @@ function t8_step3_adapt_callback(forest,
   tree_vertices = c"t8_forest_get_tree_vertices"(forest_from, which_tree);
   
   # /* Compute the element's centroid coordinates. */
-  c"t8_forest_element_centroid"(forest_from, which_tree, elements[1], Ref(centroid));
+  c"t8_forest_element_centroid"(forest_from, which_tree, elements[1], pointer(centroid));
   
   # /* Compute the distance to our sphere midpoint. */
   dist = c"t8_vec_dist"(Ref(centroid), Ref(adapt_data.midpoint));
