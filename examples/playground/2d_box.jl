@@ -256,32 +256,6 @@ c"sc_init"(comm, 1, 1, NULL, c"SC_LP_ESSENTIAL");
 # c"t8_init"(c"SC_LP_PRODUCTION");
 c"t8_init"(c"SC_LP_VERBOSE");
 
-# function t8_step5_build_forest(comm, level)
-#   cmesh = c"t8_cmesh_new_hypercube_hybrid"(comm, 0, 0);
-#   scheme = c"t8_scheme_new_default_cxx"();
-# 
-#   # /* Adapt, partition, balance and create ghost elements all in the same step. */
-#   forest_apbg = c"t8_forest_t"();
-#   forest_apbg_ref = Ref(forest_apbg);
-#   c"t8_forest_init"(forest_apbg_ref);
-#   forest_apbg = forest_apbg_ref[];
-# 
-#   adapt_data = t8_step3_adapt_data_t(
-#     [0.5, 0.5, 1],              # /* Midpoints of the sphere. */
-#     0.2,                        # /* Refine if inside this radius. */
-#     0.4                         # /* Coarsen if outside this radius. */
-#   )
-# 
-#   c"t8_forest_set_user_data"(forest_apbg, Ref(adapt_data));
-#   c"t8_forest_set_adapt"(forest_apbg, forest, t8_step3_adapt_callback, 0);
-#   c"t8_forest_set_partition"(forest_apbg, NULL, 0);
-#   c"t8_forest_set_balance"(forest_apbg, NULL, 0);
-#   c"t8_forest_set_ghost"(forest_apbg, 1, c"T8_GHOST_FACES");
-#   c"t8_forest_commit"(forest_apbg);
-# 
-#   return forest_apbg;
-# end
-
 cmesh = c"t8_cmesh_new_periodic"(comm, ndim);
 # cmesh = c"t8_cmesh_new_periodic_tri"(comm);
 # cmesh = c"t8_cmesh_new_periodic_hybrid"(comm);
@@ -292,6 +266,9 @@ root_forest = c"t8_forest_new_uniform"(cmesh, scheme, level_min, 0, comm);
 
 # /* Adapt, partition, balance and create ghost elements all in the same step. */
 forest_apbg = c"t8_forest_t"();
+
+println(forest_apbg)
+
 forest_apbg_ref = Ref(forest_apbg);
 c"t8_forest_init"(forest_apbg_ref);
 forest = forest_apbg_ref[];
