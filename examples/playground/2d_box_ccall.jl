@@ -35,31 +35,34 @@ const SC_LP_SILENT     =   9     # /**< this never logs anything */
   T8_VTK_VECTOR                # /* 3 double values per element */
 end
 
+# P4EST_QUADRANT_LEN(l) = 1 << (P4EST_MAXLEVEL - l)
+
 macro SC_ASSERT(q)
-    :( $(esc(q)) ? nothing : throw(AssertionError($(string(q)))) )
+  :( $(esc(q)) ? nothing : throw(AssertionError($(string(q)))) )
 end
 
 macro P4EST_ASSERT(q)
-    :( @SC_ASSERT($(esc(q)) ) )
+  :( @SC_ASSERT($(esc(q)) ) )
 end
-
-# P4EST_QUADRANT_LEN(l) = 1 << (P4EST_MAXLEVEL - l)
 
 macro T8_ASSERT(q)
-    :( @SC_ASSERT($(esc(q)) ) )
+  :( @SC_ASSERT($(esc(q)) ) )
 end
 
-function t8_init(log_threshold)
-  return ccall(("t8_init", libt8), Cvoid, (Cint,), log_threshold)
+macro T8_CCALL(fname, rtype, args...)
+  # This macro is not supposed to be understood by weaklings ...
+  quote
+    function $(esc(fname))($((typeof(arg.args[1]) == Symbol ? esc(arg.args[1]) : esc(Expr(:kw, arg.args[1].args[1], arg.args[2])) for arg in args)...))
+      ccall(($(string(fname)), libt8), 
+        $(esc(rtype)), ($((esc(typeof(arg.args[1]) == Symbol ? arg.args[2] : arg.args[1].args[2]) for arg in args)...),), 
+        $((esc(typeof(arg.args[1]) == Symbol ? arg.args[1] : arg.args[1].args[1]) for arg in args)...))
+    end
+  end
 end
 
-# void sc_init (sc_MPI_Comm mpicomm,
-#               int catch_signals, int print_backtrace,
-#               sc_log_handler_t log_handler, int log_threshold);
-function sc_init(comm, catch_signals, print_backtrace, log_handler, log_threshold)
-  return ccall(("sc_init", libsc), Cvoid, (MPI_Comm_t,Cint,Cint,Cptr,Cint), 
-    comm, catch_signals,print_backtrace, log_handler, log_threshold)
-end
+@T8_CCALL(t8_init, Cvoid, log_threshold :: Cint = SC_LP_PRODUCTION)
+
+@T8_CCALL(sc_init, Cvoid, comm :: MPI_Comm_t, catch_signals :: Cint, print_backtrace :: Cint, log_handler :: Cptr, log_threshold :: Cint)
 
 function sc_finalize()
   return ccall(("sc_finalize", libsc), Cvoid, ())
@@ -69,33 +72,14 @@ function sc_MPI_Finalize()
   return ccall(("sc_MPI_Finalize", libsc), Cvoid, ())
 end
 
-function t8_forest_get_num_global_trees(forest)
-  return Int(-42)
-end
-
-function t8_forest_get_global_num_elements(forest)
-  return Int(-42)
-end
-
 # t8_locidx_t t8_forest_get_num_ghosts (t8_forest_t forest);
 function t8_forest_get_num_ghosts(forest)
   return ccall(("t8_forest_get_num_ghosts", libt8), t8_locidx_t, (Cptr,), forest)
 end
 
-# t8_locidx_t t8_forest_get_num_local_trees (t8_forest_t forest);
-function t8_forest_get_num_local_trees(forest)
-  return ccall(("t8_forest_get_num_local_trees", libt8), t8_locidx_t, (Cptr,), forest)
-end
+@T8_CCALL(t8_forest_get_num_local_trees, t8_locidx_t, forest :: Cptr)
 
-# t8_locidx_t t8_forest_get_local_num_elements (t8_forest_t forest);
-function t8_forest_get_local_num_elements(forest)
-  return ccall(("t8_forest_get_local_num_elements", libt8), t8_locidx_t, (Cptr,), forest)
-end
-
-# t8_locidx_t t8_forest_get_num_local_trees (t8_forest_t forest);
-function t8_forest_get_num_local_trees(forest)
-  return ccall(("t8_forest_get_num_local_trees", libt8), t8_locidx_t, (Cptr,), forest)
-end
+@T8_CCALL(t8_forest_get_local_num_elements, t8_locidx_t, forest :: Cptr)
 
 # t8_locidx_t t8_forest_get_tree_num_elements (t8_forest_t forest, t8_locidx_t ltreeid);
 function t8_forest_get_tree_num_elements(forest, ltreeid)
@@ -114,10 +98,9 @@ end
 
 function t8_cmesh_new_periodic(comm, ndim) :: Cptr
   return ccall(("t8_cmesh_new_periodic", libt8), Cptr, (MPI_Comm_t,Cint), comm, ndim)
-
-  # cmesh = c"t8_cmesh_new_periodic_tri"(comm);
-  # cmesh = c"t8_cmesh_new_periodic_hybrid"(comm);
 end
+
+@T8_CCALL(t8_cmesh_new_periodic_hybrid, Cptr, comm :: MPI_Comm_t)
 
 function t8_cmesh_unref(cmesh)
   ccall(("t8_cmesh_unref",libt8), Cvoid, (Cptr,), pcmesh)
@@ -147,29 +130,29 @@ end
 #   return ccall(("t8_cmesh_new_from_p4est", libt8), Cptr, (Cptr, MPI_Comm_t, Cint), conn, comm, do_partition)
 # end
 
-function t8_scheme_new_default() :: Cptr
-  # t8_scheme_cxx_t    *t8_scheme_new_default_cxx (void);
-  return ccall(("t8_scheme_new_default_cxx", libt8), Cptr, ())
-end
+# function t8_scheme_new_default() :: Cptr
+#   # t8_scheme_cxx_t    *t8_scheme_new_default_cxx (void);
+#   return ccall(("t8_scheme_new_default_cxx", libt8), Cptr, ())
+# end
+
+@T8_CCALL(t8_scheme_new_default_cxx, Cptr)
 
 # t8_forest_t t8_forest_new_uniform (t8_cmesh_t cmesh,
 #                                    t8_scheme_cxx_t *scheme,
 #                                    int level, int do_face_ghost,
 #                                    sc_MPI_Comm comm);
-function t8_forest_new_uniform(cmesh,scheme,level,do_face_ghost,comm) :: Cptr
-  return ccall(("t8_forest_new_uniform",libt8), Cptr, 
-    (Cptr, Cptr, Cint, Cint, MPI_Comm_t), cmesh, scheme, level, do_face_ghost, comm)
-end
+# function t8_forest_new_uniform(cmesh,scheme,level,do_face_ghost,comm) :: Cptr
+#   return ccall(("t8_forest_new_uniform",libt8), Cptr, 
+#     (Cptr, Cptr, Cint, Cint, MPI_Comm_t), cmesh, scheme, level, do_face_ghost, comm)
+# end
+@T8_CCALL(t8_forest_new_uniform, Cptr, cmesh :: Cptr, scheme :: Cptr, level :: Cint, do_face_ghost :: Cint, comm :: MPI_Comm_t)
 
 function string2ASCII(s,BUFSIZ=BUFSIZ)
   n = min(length(s),BUFSIZ)
   return NTuple{BUFSIZ,UInt8}(Vector{UInt8}(s[1:n] * "\0"^(BUFSIZ-n)))
 end
 
-# void t8_forest_init (t8_forest_t *pforest);
-function t8_forest_init(pforest)
-  return ccall(("t8_forest_init",libt8), Cvoid, (Cptr,), pforest)
-end
+@T8_CCALL(t8_forest_init, Cvoid, pforest :: Cptr)
 
 function t8_forest_init()
   forest = Ptr{t8_forest}(0);
@@ -268,10 +251,18 @@ end
 #                                              int do_not_use_API,
 #                                              int num_data,
 #                                              t8_vtk_data_field_t *data);
-function t8_forest_write_vtk_ext(forest, fileprefix, write_treeid, write_mpirank, write_level, write_element_id, write_ghosts, write_curved, do_not_use_API, num_data, data)
-  return ccall(("t8_forest_write_vtk_ext",libt8), Cint, (Cptr, Cstring, Cint, Cint, Cint, Cint, Cint, Cint, Cint, Cint, Cptr),
-    forest, fileprefix, write_treeid, write_mpirank, write_level, write_element_id, write_ghosts, write_curved, do_not_use_API, num_data, data)
-end
+@T8_CCALL(t8_forest_write_vtk_ext, Cint, 
+  forest            :: Cptr, 
+  fileprefix        :: Cstring, 
+  write_treeid      :: Cint,
+  write_mpirank     :: Cint,
+  write_level       :: Cint,
+  write_element_id  :: Cint,
+  write_ghosts      :: Cint,
+  write_curved      :: Cint,
+  do_not_use_API    :: Cint,
+  num_data          :: Cint,
+  data              :: Cptr)
 
 # function t8_global_productionf(fmtstr :: String, args...)
 #   Printf.@printf( "[t8] "*fmtstr, args...)
@@ -457,7 +448,8 @@ function _create_element_data(forest)
       # println("centroid = ", centroid)
       # println("volume = ", volume)
 
-      state = centroid[1]^2 - centroid[2]^2
+      # state = centroid[1]^2 - centroid[2]^2
+      state = sin(7*centroid[1]) + cos(2*centroid[2])
 
       element_data[current_index] = t8_step5_data_per_element_t(level,volume,state)
     end # for
@@ -529,7 +521,7 @@ const prefix_forest           = "2d_forest";
 const prefix_forest_with_data = "2d_forest_with_volume_data";
 
 # /* The uniform refinement level of the forest. */
-const level_min = 3;
+const level_min = 4;
 const level_max = 7;
 const ndim = 2;
 
@@ -543,10 +535,10 @@ sc_init(comm, 1, 1, C_NULL, SC_LP_VERBOSE);
 # t8_init"(SC_LP_PRODUCTION);
 t8_init(SC_LP_VERBOSE);
 
-cmesh = t8_cmesh_new_periodic(comm, ndim);
+# cmesh = t8_cmesh_new_periodic(comm, ndim);
 # cmesh = c"t8_cmesh_new_periodic_tri"(comm);
-# cmesh = c"t8_cmesh_new_periodic_hybrid"(comm);
-scheme = t8_scheme_new_default();
+cmesh = t8_cmesh_new_periodic_hybrid(comm);
+scheme = t8_scheme_new_default_cxx();
 
 # /* Start with a uniform forest. */
 root_forest = t8_forest_new_uniform(cmesh, scheme, level_min, 0, comm);
