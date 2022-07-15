@@ -1,21 +1,13 @@
-# vim: tabstop=2:softtabstop=2
-
 using MPI
-using Printf
-# using T8code
-# using CBinding
-
-struct t8_forest end
 
 Cptr = Ptr{Cvoid}
-CChar = UInt8
 MPI_Comm_t = Cptr
 t8_locidx_t = Int32
 
 T8DIR = ENV["JULIA_T8CODE_PATH"]
 
 libt8 = "$(T8DIR)/lib/libt8.so"
-libsc = "$(T8DIR)/lib/libsc.so"
+# libsc = "$(T8DIR)/lib/libsc.so"
 # libp4 = "/home/jmark/install/t8code/lib/libt8.so"
 
 const SC_LP_DEFAULT    =  -1     # /**< this selects the SC default threshold */
@@ -49,7 +41,7 @@ macro T8_ASSERT(q)
   :( @SC_ASSERT($(esc(q)) ) )
 end
 
-macro T8_CCALL(fname, rtype, args...)
+macro t8_ccall(fname, rtype, args...)
   # This macro is not supposed to be understood by weaklings ...
   quote
     function $(esc(fname))($((typeof(arg.args[1]) == Symbol ? esc(arg.args[1]) : esc(Expr(:kw, arg.args[1].args[1], arg.args[2])) for arg in args)...))
@@ -60,185 +52,132 @@ macro T8_CCALL(fname, rtype, args...)
   end
 end
 
-@T8_CCALL(t8_init, Cvoid, log_threshold :: Cint = SC_LP_PRODUCTION)
-
-@T8_CCALL(sc_init, Cvoid, comm :: MPI_Comm_t, catch_signals :: Cint, print_backtrace :: Cint, log_handler :: Cptr, log_threshold :: Cint)
-
-function sc_finalize()
-  return ccall(("sc_finalize", libsc), Cvoid, ())
+# typedef int         (*t8_forest_adapt_t) (t8_forest_t forest,
+#                                           t8_forest_t forest_from,
+#                                           t8_locidx_t which_tree,
+#                                           t8_locidx_t lelement_id,
+#                                           t8_eclass_scheme_c *ts,
+#                                           const int is_family,
+#                                           const int num_elements,
+#                                           t8_element_t *elements[]);
+macro t8_adapt_callback(callback)
+  :( @cfunction($callback, Cint, (Cptr, Cptr, t8_locidx_t, t8_locidx_t, Cptr, Cint, Cint, Ptr{Cptr})) )
 end
 
-function sc_MPI_Finalize()
-  return ccall(("sc_MPI_Finalize", libsc), Cvoid, ())
-end
+@t8_ccall(t8_init, Cvoid, log_threshold :: Cint = SC_LP_PRODUCTION)
+
+@t8_ccall(sc_init, Cvoid, comm :: MPI_Comm_t, catch_signals :: Cint, print_backtrace :: Cint, log_handler :: Cptr, log_threshold :: Cint)
+
+@t8_ccall(sc_finalize, Cvoid)
+
+@t8_ccall(sc_MPI_finalize, Cvoid)
 
 # t8_locidx_t t8_forest_get_num_ghosts (t8_forest_t forest);
-function t8_forest_get_num_ghosts(forest)
-  return ccall(("t8_forest_get_num_ghosts", libt8), t8_locidx_t, (Cptr,), forest)
-end
+@t8_ccall(t8_forest_get_num_ghosts, t8_locidx_t, forest :: Cptr)
 
-@T8_CCALL(t8_forest_get_num_local_trees, t8_locidx_t, forest :: Cptr)
+@t8_ccall(t8_forest_get_num_local_trees, t8_locidx_t, forest :: Cptr)
 
-@T8_CCALL(t8_forest_get_local_num_elements, t8_locidx_t, forest :: Cptr)
+@t8_ccall(t8_forest_get_local_num_elements, t8_locidx_t, forest :: Cptr)
 
 # t8_locidx_t t8_forest_get_tree_num_elements (t8_forest_t forest, t8_locidx_t ltreeid);
-function t8_forest_get_tree_num_elements(forest, ltreeid)
-  return ccall(("t8_forest_get_tree_num_elements", libt8), t8_locidx_t, (Cptr,t8_locidx_t), forest, ltreeid)
-end
+@t8_ccall(t8_forest_get_tree_num_elements , t8_locidx_t, forest :: Cptr, ltreeid :: t8_locidx_t)
 
 # t8_eclass_t t8_forest_get_tree_class (t8_forest_t forest, t8_locidx_t ltreeid);
-function t8_forest_get_tree_class(forest, ltreeid)
-  return ccall(("t8_forest_get_tree_class", libt8), Cptr, (Cptr, t8_locidx_t), forest, ltreeid)
-end
+@t8_ccall(t8_forest_get_tree_class, Cptr, forest :: Cptr, ltreeid :: t8_locidx_t)
 
 # t8_eclass_scheme_c *t8_forest_get_eclass_scheme (t8_forest_t forest, t8_eclass_t eclass);
-function t8_forest_get_eclass_scheme(forest, eclass)
-  return ccall(("t8_forest_get_eclass_scheme", libt8), Cptr, (Cptr, Cptr), forest, eclass)
-end
+@t8_ccall(t8_forest_get_eclass_scheme, Cptr, forest :: Cptr, eclass :: Cptr)
 
-function t8_cmesh_new_periodic(comm, ndim) :: Cptr
-  return ccall(("t8_cmesh_new_periodic", libt8), Cptr, (MPI_Comm_t,Cint), comm, ndim)
-end
+@t8_ccall(t8_cmesh_new_periodic, Cptr, comm :: MPI_Comm_t, ndim :: Cint)
+@t8_ccall(t8_cmesh_new_periodic_hybrid, Cptr, comm :: MPI_Comm_t)
 
-@T8_CCALL(t8_cmesh_new_periodic_hybrid, Cptr, comm :: MPI_Comm_t)
-
-function t8_cmesh_unref(cmesh)
-  ccall(("t8_cmesh_unref",libt8), Cvoid, (Cptr,), pcmesh)
-end
+@t8_ccall(t8_cmesh_unref, Cvoid, pcmesh :: Cptr)
 
 # sc_MPI_Comm t8_forest_get_mpicomm (t8_forest_t forest);
-function t8_forest_get_mpicomm(forest)
-  return ccall(("t8_forest_get_mpicomm",libt8), Cptr, (Cptr,), forest)
-end
+@t8_ccall(t8_forest_get_mpicomm, MPI_Comm_t, forest :: Cptr)
 
 # void t8_forest_unref (t8_forest_t *pforest);
-function t8_forest_unref(pforest)
-  ccall(("t8_forest_unref",libt8), Cvoid, (Cptr,), pforest)
-end
+@t8_ccall(t8_forest_unref, Cvoid, pforest :: Cptr)
 
-function t8_scheme_cxx_unref(pscheme)
-  # void t8_scheme_cxx_unref (t8_scheme_cxx_t **pscheme);
-  ccall(("t8_scheme_cxx_unref",libt8), Cvoid, (Cptr,), pscheme)
-end
+# void t8_scheme_cxx_unref (t8_scheme_cxx_t **pscheme);
+@t8_ccall(t8_scheme_cxx_unref, Cvoid, pscheme :: Cptr)
 
-# function t8_cmesh_new_from_p4est(conn, do_partition = 0) :: Cptr
-#   # cmesh = c"t8_cmesh_new_from_p4est"(conn, comm, do_partition)
-#   # cmesh = C_NULL
-#   # return cmesh
-#   return C_NULL
-# 
-#   return ccall(("t8_cmesh_new_from_p4est", libt8), Cptr, (Cptr, MPI_Comm_t, Cint), conn, comm, do_partition)
-# end
-
-# function t8_scheme_new_default() :: Cptr
-#   # t8_scheme_cxx_t    *t8_scheme_new_default_cxx (void);
-#   return ccall(("t8_scheme_new_default_cxx", libt8), Cptr, ())
-# end
-
-@T8_CCALL(t8_scheme_new_default_cxx, Cptr)
+# t8_scheme_cxx_t *t8_scheme_new_default_cxx (void);
+@t8_ccall(t8_scheme_new_default_cxx, Cptr)
 
 # t8_forest_t t8_forest_new_uniform (t8_cmesh_t cmesh,
 #                                    t8_scheme_cxx_t *scheme,
 #                                    int level, int do_face_ghost,
 #                                    sc_MPI_Comm comm);
-# function t8_forest_new_uniform(cmesh,scheme,level,do_face_ghost,comm) :: Cptr
-#   return ccall(("t8_forest_new_uniform",libt8), Cptr, 
-#     (Cptr, Cptr, Cint, Cint, MPI_Comm_t), cmesh, scheme, level, do_face_ghost, comm)
-# end
-@T8_CCALL(t8_forest_new_uniform, Cptr, cmesh :: Cptr, scheme :: Cptr, level :: Cint, do_face_ghost :: Cint, comm :: MPI_Comm_t)
+@t8_ccall(t8_forest_new_uniform, 
+  Cptr, cmesh :: Cptr, scheme :: Cptr, level :: Cint, do_face_ghost :: Cint, comm :: MPI_Comm_t)
 
 function string2ASCII(s,BUFSIZ=BUFSIZ)
   n = min(length(s),BUFSIZ)
   return NTuple{BUFSIZ,UInt8}(Vector{UInt8}(s[1:n] * "\0"^(BUFSIZ-n)))
 end
 
-@T8_CCALL(t8_forest_init, Cvoid, pforest :: Cptr)
+@t8_ccall(t8_forest_init, Cvoid, pforest :: Cptr)
 
 function t8_forest_init()
-  forest = Ptr{t8_forest}(0);
+  forest = Ptr{Cptr}(0);
   forest_ref = Ref(forest);
   t8_forest_init(forest_ref);
   return forest_ref[];
 end
 
 # void t8_forest_set_user_data (t8_forest_t forest, void *data);
-function t8_forest_set_user_data(forest, data)
-  ccall(("t8_forest_set_user_data",libt8), Cvoid, (Cptr, Cptr), forest, data)
-end
+@t8_ccall(t8_forest_set_user_data, Cvoid, pforest :: Cptr, data :: Cptr)
 
 # void *t8_forest_get_user_data (t8_forest_t forest);
-function t8_forest_get_user_data(forest)
-  return ccall(("t8_forest_get_user_data",libt8), Cptr, (Cptr,), forest)
-end
+@t8_ccall(t8_forest_get_user_data, Cptr, pforest :: Cptr)
 
 # int t8_forest_is_committed (t8_forest_t forest);
-function t8_forest_is_committed(forest)
-  return ccall(("t8_forest_is_committed",libt8), Cint, (Cptr,), forest)
-end
+@t8_ccall(t8_forest_is_committed, Cint, pforest :: Cptr)
 
 # void t8_forest_set_adapt (t8_forest_t forest,
 #                           const t8_forest_t set_from,
 #                           t8_forest_adapt_t adapt_fn,
 #                           int recursive);
-function t8_forest_set_adapt(forest, set_from, adapt_fn, recursive=0)
-  ccall(("t8_forest_set_adapt",libt8), Cvoid, (Cptr, Cptr, Cptr, Cint), forest, set_from, adapt_fn, recursive)
-end
+@t8_ccall(t8_forest_set_adapt, Cvoid, pforest :: Cptr, set_from :: Cptr, adapt_fn :: Cptr, recursive :: Cint)
 
 # void t8_forest_set_partition (t8_forest_t forest,
 #                               const t8_forest_t set_from,
 #                               int set_for_coarsening);
-function t8_forest_set_partition(forest, set_from, set_for_coarsening=0)
-  ccall(("t8_forest_set_partition",libt8), Cvoid, (Cptr, Cptr, Cint), forest, set_from, set_for_coarsening)
-end
+@t8_ccall(t8_forest_set_partition, Cvoid, pforest :: Cptr, set_from :: Cptr, set_for_coarsening :: Cint)
 
 # void t8_forest_set_balance (t8_forest_t forest,
 #                             const t8_forest_t set_from,
 #                             int no_repartition);
-function t8_forest_set_balance(forest, set_from, no_repartion=0)
-  ccall(("t8_forest_set_balance",libt8), Cvoid, (Cptr, Cptr, Cint), forest, set_from, no_repartion)
-end
+@t8_ccall(t8_forest_set_balance, Cvoid, pforest :: Cptr, set_from :: Cptr, no_repartition :: Cint)
 
 # void t8_forest_commit (t8_forest_t forest);
-function t8_forest_commit(forest)
-  return ccall(("t8_forest_commit",libt8), Cvoid, (Cptr,), forest)
-end
+@t8_ccall(t8_forest_commit, Cvoid, pforest :: Cptr)
 
 # int t8_element_level (t8_eclass_scheme_c *ts, const t8_element_t *elem);
-function t8_element_level(ts, elem)
-  return ccall(("t8_element_level",libt8), Cint, (Cptr,Cptr), ts, elem)
-end
+@t8_ccall(t8_element_level, Cint, ts :: Cptr, elem :: Cptr)
 
 # double              t8_forest_element_volume (t8_forest_t forest,
 #                                               t8_locidx_t ltreeid,
 #                                               const t8_element_t *element);
-function t8_forest_element_volume(forest, ltreeid, element)
-  return ccall(("t8_forest_element_volume",libt8), Cdouble, (Cptr,t8_locidx_t, Cptr), forest, ltreeid, element)
-end
+@t8_ccall(t8_forest_element_volume, Cdouble, forest :: Cptr, ltreeid :: t8_locidx_t, element :: Cptr)
 
 # double *t8_forest_get_tree_vertices (t8_forest_t forest, t8_locidx_t ltreeid);
-function t8_forest_get_tree_vertices(forest, ltreeid)
-  return ccall(("t8_forest_get_tree_vertices",libt8), Ptr{Cdouble}, (Cptr,t8_locidx_t), forest, ltreeid)
-end
+@t8_ccall(t8_forest_get_tree_vertices, Ptr{Cdouble}, forest :: Cptr, ltreeid :: t8_locidx_t)
 
 # void t8_forest_element_centroid (t8_forest_t forest,
 #                                  t8_locidx_t ltreeid,
 #                                  const t8_element_t *element,
 #                                  double *coordinates);
-function t8_forest_element_centroid(forest, ltreeid, element, coordinates)
-  ccall(("t8_forest_element_centroid",libt8), Cvoid, (Cptr,t8_locidx_t,Cptr,Ptr{Cdouble}), forest, ltreeid, element, coordinates)
-end
+@t8_ccall(t8_forest_element_centroid, Cvoid, forest :: Cptr, ltreeid :: t8_locidx_t, element :: Cptr, coordinates :: Ptr{Cdouble})
 
 # t8_element_t       *t8_forest_get_element_in_tree (t8_forest_t forest,
 #                                                    t8_locidx_t ltreeid,
 #                                                    t8_locidx_t leid_in_tree);
-function t8_forest_get_element_in_tree(forest, ltreeid, leid_in_tree)
-  return ccall(("t8_forest_get_element_in_tree",libt8), Cptr, (Cptr,t8_locidx_t,t8_locidx_t), forest, ltreeid, leid_in_tree)
-end
+@t8_ccall(t8_forest_get_element_in_tree, Cptr, forest :: Cptr, ltreeid :: t8_locidx_t, leid_in_tree :: t8_locidx_t)
 
 # double t8_vec_dist (const double vec_x[3], const double vec_y[3]);
-function t8_vec_dist(vec_x, vec_y)
-  return ccall(("t8_vec_dist",libt8), Cdouble, (Ptr{Cdouble},Ptr{Cdouble}), vec_x, vec_y)
-end
+@t8_ccall(t8_vec_dist, Cdouble, vex_x :: Ptr{Cdouble}, vex_y :: Ptr{Cdouble})
 
 # int                 t8_forest_write_vtk_ext (t8_forest_t forest,
 #                                              const char *fileprefix,
@@ -251,7 +190,7 @@ end
 #                                              int do_not_use_API,
 #                                              int num_data,
 #                                              t8_vtk_data_field_t *data);
-@T8_CCALL(t8_forest_write_vtk_ext, Cint, 
+@t8_ccall(t8_forest_write_vtk_ext, Cint, 
   forest            :: Cptr, 
   fileprefix        :: Cstring, 
   write_treeid      :: Cint,
@@ -263,29 +202,6 @@ end
   do_not_use_API    :: Cint,
   num_data          :: Cint,
   data              :: Cptr)
-
-# function t8_global_productionf(fmtstr :: String, args...)
-#   Printf.@printf( "[t8] "*fmtstr, args...)
-# 
-#   # j2c = Dict(String => Cstring, Int => Clong, Int32 => Cint)
-#   # # @ccall libt8.t8_global_productionf(fmtstr :: Cstring, args :: Cstring) :: Cvoid
-#   # 
-#   # # Targs = (Cstring)
-#   # # println((Cstring, Targs...))
-#   # #
-#   # Targs = :(Cstring,Tuple(j2c[typeof(arg)] for arg in  $args)...)
-# 
-#   # println(eval(Targs))
-# 
-#   # # Targs = :(Cstring, Cstring)
-#   # # println(typeof(Targs))
-# 
-#   # # ccall(("t8_global_productionf",libt8), Cvoid, (Cstring, Targs...), fmtstr, args...)
-#   # # ccall(("t8_global_productionf",libt8), Cvoid, (Cstring, Cstring), fmtstr, args...)
-#   # # @eval ccall(("t8_global_productionf",libt8), Cvoid, $Targs, $fmtstr, $args...)
-#   # println(:(ccall(("t8_global_productionf",$libt8), Cvoid, $Targs, $fmtstr, $(args...))))
-#   # # eval(:(ccall(("t8_global_productionf",$libt8), Cvoid, ($(Targs...)), $fmtstr, $(args...))))
-# end
 
 # /* This is our own defined data that we will pass on to the
 #  * adaptation callback. */
@@ -311,7 +227,7 @@ struct t8_vtk_data_field_t
   data        :: Ptr{Cvoid}
 end
 
-function _adapt_callback(forest,
+function adapt_callback(forest,
                          forest_from,
                          which_tree,
                          lelement_id,
@@ -552,20 +468,9 @@ adapt_data = t8_step3_adapt_data_t(
   0.4                         # /* Coarsen if outside this radius. */
 )
 
-# typedef int         (*t8_forest_adapt_t) (t8_forest_t forest,
-#                                           t8_forest_t forest_from,
-#                                           t8_locidx_t which_tree,
-#                                           t8_locidx_t lelement_id,
-#                                           t8_eclass_scheme_c *ts,
-#                                           const int is_family,
-#                                           const int num_elements,
-#                                           t8_element_t *elements[]);
-c_adapt_callback = @cfunction(_adapt_callback, Cint, 
-  (Ptr{t8_forest}, Ptr{t8_forest}, t8_locidx_t, t8_locidx_t, Cptr, Cint, Cint, Ptr{Cptr}))
-
 t8_forest_set_user_data(forest, Ref(adapt_data));
 
-t8_forest_set_adapt(forest, root_forest, c_adapt_callback, 1);
+t8_forest_set_adapt(forest, root_forest, @t8_adapt_callback(adapt_callback), 1);
 
 t8_forest_set_partition(forest, C_NULL, 0);
 t8_forest_set_balance(forest, C_NULL, 0);
@@ -616,3 +521,5 @@ t8_forest_unref(Ref(forest));
 
 sc_finalize();
 # sc_MPI_Finalize();
+
+# vim: tabstop=2:softtabstop=2
